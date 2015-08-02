@@ -322,15 +322,15 @@ class LocationManager: NSObject,CLLocationManagerDelegate {
         self.reverseGeocodingCompletionHandler!(reverseGecodeInfo:nil,placemark:nil, error: error!.localizedDescription)
       } else {
         
-        if let placemark = placemarks![0] as CLPlacemark {
-          var address = AddressParser()
-          address.parseAppleLocationData(placemark)
+//        if let placemark = placemarks![0] as CLPlacemark {
+          let address = AddressParser()
+          address.parseAppleLocationData(placemarks![0])
           let addressDict = address.getAddressDictionary()
-          self.reverseGeocodingCompletionHandler!(reverseGecodeInfo: addressDict,placemark:placemark,error: nil)
-        } else {
-          self.reverseGeocodingCompletionHandler!(reverseGecodeInfo: nil,placemark:nil,error: NSLocalizedString("No Placemarks Found!", comment: ""))
-          return
-        }
+          self.reverseGeocodingCompletionHandler!(reverseGecodeInfo: addressDict,placemark:placemarks![0],error: nil)
+//        } else {
+//          self.reverseGeocodingCompletionHandler!(reverseGecodeInfo: nil,placemark:nil,error: NSLocalizedString("No Placemarks Found!", comment: ""))
+//          return
+//        }
       }
     })
   }
@@ -345,14 +345,15 @@ class LocationManager: NSObject,CLLocationManagerDelegate {
   private func geoCodeAddress(address:NSString){
     
     let geocoder = CLGeocoder()
-    geocoder.geocodeAddressString(address as String, completionHandler: {(placemarks: [AnyObject]!, error: NSError!) -> Void in
+    
+    geocoder.geocodeAddressString(address as String, completionHandler: {(placemarks, error) -> Void in
       
       if error != nil {
         
-        self.geocodingCompletionHandler!(gecodeInfo:nil,placemark:nil,error: error.localizedDescription)
+        self.geocodingCompletionHandler!(gecodeInfo:nil,placemark:nil,error: error!.localizedDescription)
       } else {
-        if let placemark = placemarks?[0] as? CLPlacemark {
-          var address = AddressParser()
+        if let placemark = placemarks?[0] {
+          let address = AddressParser()
           address.parseAppleLocationData(placemark)
           let addressDict = address.getAddressDictionary()
           self.geocodingCompletionHandler!(gecodeInfo: addressDict,placemark:placemark,error: nil)
@@ -412,7 +413,7 @@ class LocationManager: NSObject,CLLocationManagerDelegate {
       
       if error != nil {
         
-        self.setCompletionHandler(responseInfo:nil, placemark:nil, error:error.localizedDescription, type:type)
+        self.setCompletionHandler(responseInfo:nil, placemark:nil, error:error!.localizedDescription, type:type)
       } else {
         
         let kStatus = "status"
@@ -423,9 +424,9 @@ class LocationManager: NSObject,CLLocationManagerDelegate {
         let kInvalidRequest = "INVALID_REQUEST"
         let kInvalidInput =  "Invalid Input"
         
-        let dataAsString: NSString? = NSString(data: data, encoding: NSUTF8StringEncoding)
+        let dataAsString: NSString? = NSString(data: data!, encoding: NSUTF8StringEncoding)
         
-        let jsonResult: NSDictionary = try! NSJSONSerialization.JSONObjectWithData(data, options: NSJSONReadingOptions.MutableContainers) as! NSDictionary
+        let jsonResult: NSDictionary = try! NSJSONSerialization.JSONObjectWithData(data!, options: NSJSONReadingOptions.MutableContainers) as! NSDictionary
         
         var status = jsonResult.valueForKey(kStatus) as! NSString
         status = status.lowercaseString
@@ -516,17 +517,17 @@ private class AddressParser: NSObject{
   
   private func parseAppleLocationData(placemark:CLPlacemark) {
     
-    var addressLines = placemark.addressDictionary["FormattedAddressLines"] as! NSArray
+    let addressLines = placemark.addressDictionary?["FormattedAddressLines"] as! NSArray
     
     //self.streetNumber = placemark.subThoroughfare ? placemark.subThoroughfare : ""
-    self.streetNumber = placemark.thoroughfare != nil ? placemark.thoroughfare : ""
-    self.locality = placemark.locality != nil ? placemark.locality : ""
-    self.postalCode = placemark.postalCode != nil ? placemark.postalCode : ""
-    self.subLocality = placemark.subLocality != nil ? placemark.subLocality : ""
-    self.administrativeArea = placemark.administrativeArea != nil ? placemark.administrativeArea : ""
-    self.country = placemark.country != nil ?  placemark.country : ""
-    self.longitude = placemark.location.coordinate.longitude.description;
-    self.latitude = placemark.location.coordinate.latitude.description
+    self.streetNumber = (placemark.thoroughfare != nil ? placemark.thoroughfare : "")!
+    self.locality = (placemark.locality != nil ? placemark.locality : "")!
+    self.postalCode = (placemark.postalCode != nil ? placemark.postalCode : "")!
+    self.subLocality = (placemark.subLocality != nil ? placemark.subLocality : "")!
+    self.administrativeArea = (placemark.administrativeArea != nil ? placemark.administrativeArea : "")!
+    self.country = (placemark.country != nil ?  placemark.country : "")!
+    self.longitude = placemark.location!.coordinate.longitude.description;
+    self.latitude = placemark.location!.coordinate.latitude.description
     if addressLines.count>0 {
       self.formattedAddress = addressLines.componentsJoinedByString(", ")
     } else {
@@ -594,8 +595,11 @@ private class AddressParser: NSObject{
   
   private func getPlacemark() -> CLPlacemark {
     
-    var addressDict = NSMutableDictionary()
+//    var addressDict = NSMutableDictionary()
+    var addressDict = [String: AnyObject]()
+//    var addressDict = NSMutableDictionary<String, AnyObject>()
     
+
     var formattedAddressArray = self.formattedAddress.componentsSeparatedByString(", ") as Array
     
     let kSubAdministrativeArea = "SubAdministrativeArea"
@@ -611,28 +615,30 @@ private class AddressParser: NSObject{
     let kCountry               = "Country"
     let kCountryCode           = "CountryCode"
     
-    addressDict.setObject(self.subAdministrativeArea, forKey: kSubAdministrativeArea)
-    addressDict.setObject(self.subLocality, forKey: kSubLocality)
-    addressDict.setObject(self.administrativeAreaCode, forKey: kState)
+    addressDict[kSubAdministrativeArea] = self.subAdministrativeArea
+    addressDict[kSubLocality] = self.subLocality
+    addressDict[kState] = self.administrativeAreaCode
     
-    addressDict.setObject(formattedAddressArray.first as! NSString, forKey: kStreet)
-    addressDict.setObject(self.thoroughfare, forKey: kThoroughfare)
-    addressDict.setObject(formattedAddressArray, forKey: kFormattedAddressLines)
-    addressDict.setObject(self.subThoroughfare, forKey: kSubThoroughfare)
-    addressDict.setObject("", forKey: kPostCodeExtension)
-    addressDict.setObject(self.locality, forKey: kCity)
-    
-    
-    addressDict.setObject(self.postalCode, forKey: kZIP)
-    addressDict.setObject(self.country, forKey: kCountry)
-    addressDict.setObject(self.ISOcountryCode, forKey: kCountryCode)
+    addressDict[kStreet] = formattedAddressArray.first
+    addressDict[kThoroughfare] = self.thoroughfare
+    addressDict[kFormattedAddressLines] = formattedAddressArray
+    addressDict[kSubThoroughfare] = self.subThoroughfare
+    addressDict[kPostCodeExtension] = ""
+    addressDict[kCity] = self.locality
     
     
-    var lat = self.latitude.doubleValue
-    var lng = self.longitude.doubleValue
-    var coordinate = CLLocationCoordinate2D(latitude: lat, longitude: lng)
+    addressDict[kZIP] = self.postalCode
+    addressDict[kCountry] = self.country
+    addressDict[kCountryCode] = self.ISOcountryCode
     
-    var placemark = MKPlacemark(coordinate: coordinate, addressDictionary: addressDict as [NSObject : AnyObject])
+    
+    let lat = self.latitude.doubleValue
+    let lng = self.longitude.doubleValue
+    let coordinate = CLLocationCoordinate2D(latitude: lat, longitude: lng)
+    
+    
+//    var placemark = MKPlacemark(coordinate: coordinate, addressDictionary: addressDict as [NSObject : AnyObject])
+    let placemark = MKPlacemark(coordinate: coordinate, addressDictionary: addressDict)
     
     return (placemark as CLPlacemark)
   }
